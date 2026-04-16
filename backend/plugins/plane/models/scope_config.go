@@ -42,5 +42,8 @@ func (r *PlaneScopeConfig) SetConnectionId(c *PlaneScopeConfig, connectionId uin
 }
 
 func (r *PlaneScopeConfig) Validate() errors.Error {
+	if r.ConnectionId == 0 {
+		return errors.BadInput.New("ConnectionId is required")
+	}
 	return nil
 }

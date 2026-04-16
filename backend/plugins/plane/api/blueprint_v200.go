@@ -78,12 +78,12 @@ func makeDataSourcePipelinePlanV200(
 ) (coreModels.PipelinePlan, errors.Error) {
 	plan := make(coreModels.PipelinePlan, len(scopeDetails))
 	for i, scopeDetail := range scopeDetails {
-		stage := plan[i]
-		if stage == nil {
-			stage = coreModels.PipelineStage{}
-		}
+		stage := coreModels.PipelineStage{}
 
 		scope := scopeDetail.Scope
+		if scope.ProjectId == "" {
+			return nil, errors.BadInput.New("scope is missing ProjectId")
+		}
 		task, err := helper.MakePipelinePlanTask(
 			"plane",
 			subtaskMetas,

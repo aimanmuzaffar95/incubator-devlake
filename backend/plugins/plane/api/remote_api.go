@@ -88,7 +88,7 @@ func listPlaneRemoteScopes(
 		return nil, nil, errors.BadInput.New("connection is required")
 	}
 	if connection.WorkspaceSlug == "" {
-		return []dsmodels.DsRemoteApiScopeListEntry[models.PlaneProject]{}, nil, nil
+		return nil, nil, errors.BadInput.New("WorkspaceSlug is required on the connection")
 	}
 
 	query := url.Values{
@@ -142,7 +142,7 @@ func searchPlaneRemoteScopes(
 		return []dsmodels.DsRemoteApiScopeListEntry[models.PlaneProject]{}, nil
 	}
 	if workspaceSlug == "" {
-		return []dsmodels.DsRemoteApiScopeListEntry[models.PlaneProject]{}, nil
+		return nil, errors.BadInput.New("WorkspaceSlug is required")
 	}
 
 	query := url.Values{
@@ -189,19 +189,20 @@ func searchPlaneRemoteScopes(
 		}
 
 		pagesFetched++
-		if !body.NextPageResults || body.NextCursor == "" || pagesFetched >= maxSearchPages {
+		if !body.NextPageResults || body.NextCursor == "" {
+			break
+		}
+		if pagesFetched >= maxSearchPages {
+			basicRes.GetLogger().Warn(nil, "searchPlaneRemoteScopes: reached maxSearchPages (%d), results may be incomplete for workspace %q", maxSearchPages, workspaceSlug)
 			break
 		}
 		cursor = body.NextCursor
 	}
 
+	if params.Page <= 0 || params.PageSize <= 0 {
+		return nil, errors.BadInput.New("page and pageSize must be positive integers")
+	}
 	start := (params.Page - 1) * params.PageSize
-	if params.Page <= 0 {
-		start = 0
-	}
-	if params.PageSize <= 0 {
-		params.PageSize = 20
-	}
 	if start >= len(matched) {
 		return []dsmodels.DsRemoteApiScopeListEntry[models.PlaneProject]{}, nil
 	}

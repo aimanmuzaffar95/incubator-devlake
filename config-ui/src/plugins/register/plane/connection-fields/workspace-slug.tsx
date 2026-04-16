@@ -31,12 +31,16 @@ interface Props {
 export const WorkspaceSlug = ({ initialValues, values, setValues, setErrors }: Props) => {
   useEffect(() => {
     setValues({ workspaceSlug: initialValues.workspaceSlug ?? '' });
+    // Intentionally omitting `setValues` from deps — it is a stable setter and
+    // this effect should only re-run when the saved initialValue changes (e.g. on load).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialValues.workspaceSlug]);
 
   useEffect(() => {
     const value = `${values.workspaceSlug ?? ''}`.trim();
     setErrors({ workspaceSlug: value ? '' : 'Workspace slug is required' });
+    // Intentionally omitting `setErrors` from deps — it is a stable setter and
+    // this effect should only re-run when the slug value changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values.workspaceSlug]);
 
