@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/apache/incubator-devlake/core/errors"
 	"github.com/apache/incubator-devlake/core/plugin"
@@ -43,16 +44,20 @@ func CollectWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 
 	taskCtx.GetLogger().Info(planeUpdatedAtOrderingVerification)
 
-	collector, err := api.NewApiCollector(api.ApiCollectorArgs{
-		RawDataSubTaskArgs: api.RawDataSubTaskArgs{
-			Ctx: taskCtx,
-			Params: PlaneApiParams{
-				ConnectionId:  data.Options.ConnectionId,
-				WorkspaceSlug: data.Project.WorkspaceSlug,
-				ProjectId:     data.Options.ProjectId,
-			},
-			Table: RAW_WORK_ITEM_TABLE,
+	collector, err := api.NewStatefulApiCollector(api.RawDataSubTaskArgs{
+		Ctx: taskCtx,
+		Params: PlaneApiParams{
+			ConnectionId:  data.Options.ConnectionId,
+			WorkspaceSlug: data.Project.WorkspaceSlug,
+			ProjectId:     data.Options.ProjectId,
 		},
+		Table: RAW_WORK_ITEM_TABLE,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = collector.InitCollector(api.ApiCollectorArgs{
 		ApiClient:   data.ApiClient,
 		PageSize:    planeWorkItemPageSize,
 		UrlTemplate: "api/v1/workspaces/{{ .Params.WorkspaceSlug }}/projects/{{ .Params.ProjectId }}/work-items/",
@@ -62,13 +67,16 @@ func CollectWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 			if cursor, ok := reqData.CustomData.(string); ok && cursor != "" {
 				query.Set("cursor", cursor)
 			}
+			if since := collector.GetSince(); since != nil {
+				query.Set("updated_at__gte", since.UTC().Format(time.RFC3339))
+			}
 			return query, nil
 		},
 		GetNextPageCustomData: func(_ *api.RequestData, prevPageResponse *http.Response) (interface{}, errors.Error) {
 			return parsePlaneNextCursor(prevPageResponse)
 		},
 		ResponseParser: func(res *http.Response) ([]json.RawMessage, errors.Error) {
-			return parsePlanePaginatedResults(res)
+			return parsePlaneWorkItemResultsForCollector(res, collector.GetSince())
 		},
 	})
 	if err != nil {

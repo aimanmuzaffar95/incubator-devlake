@@ -18,8 +18,6 @@ limitations under the License.
 package tasks
 
 import (
-	"encoding/json"
-
 	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
 	"github.com/apache/incubator-devlake/core/plugin"
@@ -50,23 +48,19 @@ func ExtractWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 		return err
 	}
 
-	extractor, err := api.NewApiExtractor(api.ApiExtractorArgs{
-		RawDataSubTaskArgs: api.RawDataSubTaskArgs{
-			Ctx: taskCtx,
+	extractor, err := api.NewStatefulApiExtractor(&api.StatefulApiExtractorArgs[planeApiWorkItem]{
+		SubtaskCommonArgs: &api.SubtaskCommonArgs{
+			SubTaskContext: taskCtx,
+			Table:          RAW_WORK_ITEM_TABLE,
 			Params: PlaneApiParams{
 				ConnectionId:  data.Options.ConnectionId,
 				WorkspaceSlug: data.Project.WorkspaceSlug,
 				ProjectId:     data.Options.ProjectId,
 			},
-			Table: RAW_WORK_ITEM_TABLE,
 		},
-		Extract: func(row *api.RawData) ([]interface{}, errors.Error) {
-			var body planeApiWorkItem
-			if err := json.Unmarshal(row.Data, &body); err != nil {
-				return nil, errors.Default.Wrap(err, "error unmarshalling Plane work item")
-			}
+		Extract: func(body *planeApiWorkItem, _ *api.RawData) ([]any, errors.Error) {
 			workItem, err := mapPlaneWorkItem(
-				&body,
+				body,
 				data.Options.ConnectionId,
 				data.Options.ProjectId,
 				stateMap,

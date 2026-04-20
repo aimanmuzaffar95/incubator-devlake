@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 	"github.com/apache/incubator-devlake/plugins/plane/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -127,15 +126,6 @@ func TestExtractPlaneWorkItem_AssigneeAndResolvedFields(t *testing.T) {
 	assert.True(t, workItem.IsClosed)
 }
 
-func TestBuildPlaneWorkItemCollectorWatermark(t *testing.T) {
-	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
-
-	watermark := buildPlaneWorkItemCollectorWatermark(since)
-	require.NotNil(t, watermark)
-	assert.Equal(t, since.Add(-planeWorkItemIncrementalGrace), *watermark)
-	assert.Nil(t, buildPlaneWorkItemCollectorWatermark(nil))
-}
-
 func TestParsePlaneWorkItemResultsForCollectorFullRefresh(t *testing.T) {
 	response := planePaginatedResponse(t, map[string]any{
 		"next_cursor": "cursor-1",
@@ -145,14 +135,14 @@ func TestParsePlaneWorkItemResultsForCollectorFullRefresh(t *testing.T) {
 		},
 	})
 
-	results, err := parsePlaneWorkItemResultsForCollector(response, nil, false)
+	results, err := parsePlaneWorkItemResultsForCollector(response, nil)
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 	assert.JSONEq(t, `{"id":"item-1","updated_at":"2024-01-10T12:00:00Z"}`, string(results[0]))
 }
 
-func TestParsePlaneWorkItemResultsForCollectorOrderedIncremental(t *testing.T) {
-	watermark := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+func TestParsePlaneWorkItemResultsForCollectorIncremental(t *testing.T) {
+	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
 	response := planePaginatedResponse(t, map[string]any{
 		"next_cursor": "cursor-1",
 		"results": []map[string]any{
@@ -162,32 +152,31 @@ func TestParsePlaneWorkItemResultsForCollectorOrderedIncremental(t *testing.T) {
 		},
 	})
 
-	results, err := parsePlaneWorkItemResultsForCollector(response, watermark, true)
-	require.ErrorIs(t, err, api.ErrFinishCollect)
+	results, err := parsePlaneWorkItemResultsForCollector(response, since)
+	require.NoError(t, err)
 	require.Len(t, results, 2)
 	assert.JSONEq(t, `{"id":"item-new","updated_at":"2024-01-10T12:05:00Z"}`, string(results[0]))
 	assert.JSONEq(t, `{"id":"item-equal","updated_at":"2024-01-10T12:00:00Z"}`, string(results[1]))
 }
 
-func TestParsePlaneWorkItemResultsForCollectorGraceWindow(t *testing.T) {
+func TestParsePlaneWorkItemResultsForCollectorNoGraceWindow(t *testing.T) {
 	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
-	watermark := buildPlaneWorkItemCollectorWatermark(since)
 	response := planePaginatedResponse(t, map[string]any{
 		"next_cursor": "cursor-1",
 		"results": []map[string]any{
-			{"id": "item-grace", "updated_at": "2024-01-09T12:30:00Z"},
-			{"id": "item-too-old", "updated_at": "2024-01-09T11:59:59Z"},
+			{"id": "item-equal", "updated_at": "2024-01-10T12:00:00Z"},
+			{"id": "item-too-old", "updated_at": "2024-01-10T11:59:59Z"},
 		},
 	})
 
-	results, err := parsePlaneWorkItemResultsForCollector(response, watermark, false)
+	results, err := parsePlaneWorkItemResultsForCollector(response, since)
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.JSONEq(t, `{"id":"item-grace","updated_at":"2024-01-09T12:30:00Z"}`, string(results[0]))
+	assert.JSONEq(t, `{"id":"item-equal","updated_at":"2024-01-10T12:00:00Z"}`, string(results[0]))
 }
 
 func TestParsePlaneWorkItemResultsForCollectorFallbackAndNilUpdatedAt(t *testing.T) {
-	watermark := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
 	response := planePaginatedResponse(t, map[string]any{
 		"next_cursor": "cursor-1",
 		"results": []map[string]any{
@@ -197,7 +186,7 @@ func TestParsePlaneWorkItemResultsForCollectorFallbackAndNilUpdatedAt(t *testing
 		},
 	})
 
-	results, err := parsePlaneWorkItemResultsForCollector(response, watermark, false)
+	results, err := parsePlaneWorkItemResultsForCollector(response, since)
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 	assert.JSONEq(t, `{"id":"item-missing"}`, string(results[0]))
@@ -205,13 +194,13 @@ func TestParsePlaneWorkItemResultsForCollectorFallbackAndNilUpdatedAt(t *testing
 }
 
 func TestParsePlaneWorkItemResultsForCollectorEmptyAndAllOlder(t *testing.T) {
-	watermark := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
 
 	emptyResponse := planePaginatedResponse(t, map[string]any{
 		"next_cursor": "",
 		"results":     []map[string]any{},
 	})
-	results, err := parsePlaneWorkItemResultsForCollector(emptyResponse, watermark, false)
+	results, err := parsePlaneWorkItemResultsForCollector(emptyResponse, since)
 	require.NoError(t, err)
 	assert.Empty(t, results)
 
@@ -222,8 +211,8 @@ func TestParsePlaneWorkItemResultsForCollectorEmptyAndAllOlder(t *testing.T) {
 			{"id": "item-old-2", "updated_at": "2024-01-10T10:00:00Z"},
 		},
 	})
-	results, err = parsePlaneWorkItemResultsForCollector(olderResponse, watermark, true)
-	require.ErrorIs(t, err, api.ErrFinishCollect)
+	results, err = parsePlaneWorkItemResultsForCollector(olderResponse, since)
+	require.NoError(t, err)
 	assert.Empty(t, results)
 }
 

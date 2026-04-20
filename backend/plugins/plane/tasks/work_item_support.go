@@ -32,8 +32,6 @@ import (
 
 const (
 	planeWorkItemPageSize              = 100
-	planeWorkItemIncrementalGrace      = 24 * time.Hour
-	planeSupportsUpdatedAtOrdering     = false
 	planeUpdatedAtOrderingVerification = "Fallback mode stays enabled until a multi-page Plane dataset verifies order_by=-updated_at across page boundaries."
 
 	planeStatusCancelled = "CANCELLED"
@@ -102,54 +100,37 @@ func parsePlaneNextCursor(response *http.Response) (interface{}, errors.Error) {
 	return page.NextCursor, nil
 }
 
-func buildPlaneWorkItemCollectorWatermark(since *time.Time) *time.Time {
-	if since == nil {
-		return nil
-	}
-	watermark := since.Add(-planeWorkItemIncrementalGrace)
-	return &watermark
-}
-
 func parsePlaneWorkItemResultsForCollector(
 	response *http.Response,
-	watermark *time.Time,
-	stopWhenOlder bool,
+	since *time.Time,
 ) ([]json.RawMessage, errors.Error) {
 	var page planePaginatedResults
 	if err := api.UnmarshalResponse(response, &page); err != nil {
 		return nil, err
 	}
-	if watermark == nil {
+	if since == nil {
 		return page.Results, nil
 	}
-	return filterPlaneWorkItemsByUpdatedAt(page.Results, watermark, stopWhenOlder)
+	return filterPlaneWorkItemsByUpdatedAt(page.Results, since)
 }
 
 func filterPlaneWorkItemsByUpdatedAt(
 	results []json.RawMessage,
-	watermark *time.Time,
-	stopWhenOlder bool,
+	since *time.Time,
 ) ([]json.RawMessage, errors.Error) {
-	if watermark == nil {
+	if since == nil {
 		return results, nil
 	}
 
 	filtered := make([]json.RawMessage, 0, len(results))
-	foundOlder := false
 	for _, result := range results {
 		var marker planeApiWorkItemUpdateMarker
 		if err := json.Unmarshal(result, &marker); err != nil {
 			return nil, errors.Default.Wrap(err, "error unmarshalling Plane work item updated_at marker")
 		}
-		if marker.UpdatedAt == nil || !marker.UpdatedAt.Before(*watermark) {
+		if marker.UpdatedAt == nil || !marker.UpdatedAt.Before(*since) {
 			filtered = append(filtered, result)
-			continue
 		}
-		foundOlder = true
-	}
-
-	if stopWhenOlder && foundOlder {
-		return filtered, api.ErrFinishCollect
 	}
 	return filtered, nil
 }

@@ -19,7 +19,6 @@ package tasks
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
@@ -49,29 +48,31 @@ func ConvertWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 	boardIdGen := didgen.NewDomainIdGenerator(&models.PlaneProject{})
 	boardId := boardIdGen.Generate(data.Options.ConnectionId, data.Options.ProjectId)
 
-	cursor, err := db.Cursor(
-		dal.Select("*"),
-		dal.From(&models.PlaneWorkItem{}),
-		dal.Where("connection_id = ? AND project_id = ?", data.Options.ConnectionId, data.Options.ProjectId),
-	)
-	if err != nil {
-		return err
-	}
-
-	converter, err := api.NewDataConverter(api.DataConverterArgs{
-		RawDataSubTaskArgs: api.RawDataSubTaskArgs{
-			Ctx: taskCtx,
+	converter, err := api.NewStatefulDataConverter(&api.StatefulDataConverterArgs[models.PlaneWorkItem]{
+		SubtaskCommonArgs: &api.SubtaskCommonArgs{
+			SubTaskContext: taskCtx,
+			Table:          RAW_WORK_ITEM_TABLE,
 			Params: PlaneApiParams{
 				ConnectionId:  data.Options.ConnectionId,
 				WorkspaceSlug: data.Project.WorkspaceSlug,
 				ProjectId:     data.Options.ProjectId,
 			},
-			Table: RAW_WORK_ITEM_TABLE,
 		},
-		InputRowType: reflect.TypeOf(models.PlaneWorkItem{}),
-		Input:        cursor,
-		Convert: func(inputRow interface{}) ([]interface{}, errors.Error) {
-			workItem := inputRow.(*models.PlaneWorkItem)
+		Input: func(stateManager *api.SubtaskStateManager) (dal.Rows, errors.Error) {
+			clauses := []dal.Clause{
+				dal.Select("*"),
+				dal.From(&models.PlaneWorkItem{}),
+				dal.Where("connection_id = ? AND project_id = ?", data.Options.ConnectionId, data.Options.ProjectId),
+			}
+			if stateManager.IsIncremental() {
+				since := stateManager.GetSince()
+				if since != nil {
+					clauses = append(clauses, dal.Where("updated_at >= ?", since))
+				}
+			}
+			return db.Cursor(clauses...)
+		},
+		Convert: func(workItem *models.PlaneWorkItem) ([]any, errors.Error) {
 			issue := &ticket.Issue{
 				DomainEntity: domainlayer.DomainEntity{
 					Id: issueIdGen.Generate(workItem.ConnectionId, workItem.ProjectId, workItem.WorkItemId),
