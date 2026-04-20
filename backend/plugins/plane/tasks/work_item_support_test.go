@@ -18,12 +18,14 @@ limitations under the License.
 package tasks
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 	"github.com/apache/incubator-devlake/plugins/plane/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,24 +69,24 @@ func TestExtractPlaneWorkItem_AssigneeAndResolvedFields(t *testing.T) {
 	updatedAt := mustParsePlaneTime(t, "2024-01-11T12:00:00Z")
 	completedAt := mustParsePlaneTime(t, "2024-01-12T12:30:00Z")
 
-	workItem, err := extractPlaneWorkItem(
-		[]byte(`{
-			"id": "work-item-1",
-			"sequence_id": 42,
-			"name": "Ship Phase 4",
-			"description_stripped": "Implement work item sync",
-			"type": "type-bug",
-			"state": "state-done",
-			"priority": "high",
-			"assignees": ["user-1", "user-2"],
-			"estimate_point": 5,
-			"created_at": "2024-01-10T12:00:00Z",
-			"updated_at": "2024-01-11T12:00:00Z",
-			"completed_at": "2024-01-12T12:30:00Z",
-			"start_date": "2024-01-09",
-			"target_date": "2024-01-15",
-			"parent": "parent-1"
-		}`),
+	workItem, err := mapPlaneWorkItem(
+		&planeApiWorkItem{
+			Id:                  "work-item-1",
+			SequenceId:          42,
+			Name:                "Ship Phase 4",
+			DescriptionStripped: "Implement work item sync",
+			Type:                "type-bug",
+			State:               "state-done",
+			Priority:            "high",
+			Assignees:           []string{"user-1", "user-2"},
+			EstimatePoint:       planeTestFloat64Ptr(5),
+			CreatedAt:           createdAt,
+			UpdatedAt:           updatedAt,
+			CompletedAt:         completedAt,
+			StartDate:           "2024-01-09",
+			TargetDate:          "2024-01-15",
+			Parent:              planeTestStringPtr("parent-1"),
+		},
 		7,
 		"project-1",
 		map[string]models.PlaneState{
@@ -123,6 +125,106 @@ func TestExtractPlaneWorkItem_AssigneeAndResolvedFields(t *testing.T) {
 	require.NotNil(t, workItem.EstimatePoint)
 	assert.Equal(t, 5.0, *workItem.EstimatePoint)
 	assert.True(t, workItem.IsClosed)
+}
+
+func TestBuildPlaneWorkItemCollectorWatermark(t *testing.T) {
+	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+
+	watermark := buildPlaneWorkItemCollectorWatermark(since)
+	require.NotNil(t, watermark)
+	assert.Equal(t, since.Add(-planeWorkItemIncrementalGrace), *watermark)
+	assert.Nil(t, buildPlaneWorkItemCollectorWatermark(nil))
+}
+
+func TestParsePlaneWorkItemResultsForCollectorFullRefresh(t *testing.T) {
+	response := planePaginatedResponse(t, map[string]any{
+		"next_cursor": "cursor-1",
+		"results": []map[string]any{
+			{"id": "item-1", "updated_at": "2024-01-10T12:00:00Z"},
+			{"id": "item-2", "updated_at": "2024-01-09T12:00:00Z"},
+		},
+	})
+
+	results, err := parsePlaneWorkItemResultsForCollector(response, nil, false)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.JSONEq(t, `{"id":"item-1","updated_at":"2024-01-10T12:00:00Z"}`, string(results[0]))
+}
+
+func TestParsePlaneWorkItemResultsForCollectorOrderedIncremental(t *testing.T) {
+	watermark := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+	response := planePaginatedResponse(t, map[string]any{
+		"next_cursor": "cursor-1",
+		"results": []map[string]any{
+			{"id": "item-new", "updated_at": "2024-01-10T12:05:00Z"},
+			{"id": "item-equal", "updated_at": "2024-01-10T12:00:00Z"},
+			{"id": "item-old", "updated_at": "2024-01-10T11:59:59Z"},
+		},
+	})
+
+	results, err := parsePlaneWorkItemResultsForCollector(response, watermark, true)
+	require.ErrorIs(t, err, api.ErrFinishCollect)
+	require.Len(t, results, 2)
+	assert.JSONEq(t, `{"id":"item-new","updated_at":"2024-01-10T12:05:00Z"}`, string(results[0]))
+	assert.JSONEq(t, `{"id":"item-equal","updated_at":"2024-01-10T12:00:00Z"}`, string(results[1]))
+}
+
+func TestParsePlaneWorkItemResultsForCollectorGraceWindow(t *testing.T) {
+	since := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+	watermark := buildPlaneWorkItemCollectorWatermark(since)
+	response := planePaginatedResponse(t, map[string]any{
+		"next_cursor": "cursor-1",
+		"results": []map[string]any{
+			{"id": "item-grace", "updated_at": "2024-01-09T12:30:00Z"},
+			{"id": "item-too-old", "updated_at": "2024-01-09T11:59:59Z"},
+		},
+	})
+
+	results, err := parsePlaneWorkItemResultsForCollector(response, watermark, false)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.JSONEq(t, `{"id":"item-grace","updated_at":"2024-01-09T12:30:00Z"}`, string(results[0]))
+}
+
+func TestParsePlaneWorkItemResultsForCollectorFallbackAndNilUpdatedAt(t *testing.T) {
+	watermark := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+	response := planePaginatedResponse(t, map[string]any{
+		"next_cursor": "cursor-1",
+		"results": []map[string]any{
+			{"id": "item-old", "updated_at": "2024-01-09T12:00:00Z"},
+			{"id": "item-missing"},
+			{"id": "item-new", "updated_at": "2024-01-11T12:00:00Z"},
+		},
+	})
+
+	results, err := parsePlaneWorkItemResultsForCollector(response, watermark, false)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.JSONEq(t, `{"id":"item-missing"}`, string(results[0]))
+	assert.JSONEq(t, `{"id":"item-new","updated_at":"2024-01-11T12:00:00Z"}`, string(results[1]))
+}
+
+func TestParsePlaneWorkItemResultsForCollectorEmptyAndAllOlder(t *testing.T) {
+	watermark := mustParsePlaneTime(t, "2024-01-10T12:00:00Z")
+
+	emptyResponse := planePaginatedResponse(t, map[string]any{
+		"next_cursor": "",
+		"results":     []map[string]any{},
+	})
+	results, err := parsePlaneWorkItemResultsForCollector(emptyResponse, watermark, false)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+
+	olderResponse := planePaginatedResponse(t, map[string]any{
+		"next_cursor": "cursor-1",
+		"results": []map[string]any{
+			{"id": "item-old-1", "updated_at": "2024-01-10T11:00:00Z"},
+			{"id": "item-old-2", "updated_at": "2024-01-10T10:00:00Z"},
+		},
+	})
+	results, err = parsePlaneWorkItemResultsForCollector(olderResponse, watermark, true)
+	require.ErrorIs(t, err, api.ErrFinishCollect)
+	assert.Empty(t, results)
 }
 
 func TestPlaneWorkItemMappingHelpers(t *testing.T) {
@@ -166,4 +268,21 @@ func mustParsePlaneTime(t *testing.T, value string) *time.Time {
 	parsed, err := time.Parse(time.RFC3339, value)
 	require.NoError(t, err)
 	return &parsed
+}
+
+func planePaginatedResponse(t *testing.T, payload map[string]any) *http.Response {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	return &http.Response{
+		Body: io.NopCloser(strings.NewReader(string(body))),
+	}
+}
+
+func planeTestFloat64Ptr(value float64) *float64 {
+	return &value
+}
+
+func planeTestStringPtr(value string) *string {
+	return &value
 }

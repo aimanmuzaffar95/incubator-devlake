@@ -18,6 +18,8 @@ limitations under the License.
 package tasks
 
 import (
+	"encoding/json"
+
 	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
 	"github.com/apache/incubator-devlake/core/plugin"
@@ -59,8 +61,12 @@ func ExtractWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 			Table: RAW_WORK_ITEM_TABLE,
 		},
 		Extract: func(row *api.RawData) ([]interface{}, errors.Error) {
-			workItem, err := extractPlaneWorkItem(
-				row.Data,
+			var body planeApiWorkItem
+			if err := json.Unmarshal(row.Data, &body); err != nil {
+				return nil, errors.Default.Wrap(err, "error unmarshalling Plane work item")
+			}
+			workItem, err := mapPlaneWorkItem(
+				&body,
 				data.Options.ConnectionId,
 				data.Options.ProjectId,
 				stateMap,

@@ -45,6 +45,10 @@ func ConvertWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 	data := taskCtx.GetData().(*PlaneTaskData)
 	db := taskCtx.GetDal()
 
+	issueIdGen := didgen.NewDomainIdGenerator(&models.PlaneWorkItem{})
+	boardIdGen := didgen.NewDomainIdGenerator(&models.PlaneProject{})
+	boardId := boardIdGen.Generate(data.Options.ConnectionId, data.Options.ProjectId)
+
 	cursor, err := db.Cursor(
 		dal.Select("*"),
 		dal.From(&models.PlaneWorkItem{}),
@@ -53,11 +57,6 @@ func ConvertWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 	if err != nil {
 		return err
 	}
-	defer cursor.Close()
-
-	issueIdGen := didgen.NewDomainIdGenerator(&models.PlaneWorkItem{})
-	boardIdGen := didgen.NewDomainIdGenerator(&models.PlaneProject{})
-	boardId := boardIdGen.Generate(data.Options.ConnectionId, data.Options.ProjectId)
 
 	converter, err := api.NewDataConverter(api.DataConverterArgs{
 		RawDataSubTaskArgs: api.RawDataSubTaskArgs{
@@ -101,7 +100,6 @@ func ConvertWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 				issue.ParentIssueId = issueIdGen.Generate(workItem.ConnectionId, workItem.ProjectId, *workItem.ParentId)
 				issue.IsSubtask = true
 			}
-
 			boardIssue := &ticket.BoardIssue{
 				BoardId: boardId,
 				IssueId: issue.Id,

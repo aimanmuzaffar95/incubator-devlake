@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/apache/incubator-devlake/core/errors"
 	"github.com/apache/incubator-devlake/core/plugin"
@@ -40,6 +41,8 @@ var CollectWorkItemsMeta = plugin.SubTaskMeta{
 func CollectWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 	data := taskCtx.GetData().(*PlaneTaskData)
 
+	taskCtx.GetLogger().Info(planeUpdatedAtOrderingVerification)
+
 	collector, err := api.NewApiCollector(api.ApiCollectorArgs{
 		RawDataSubTaskArgs: api.RawDataSubTaskArgs{
 			Ctx: taskCtx,
@@ -51,11 +54,11 @@ func CollectWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 			Table: RAW_WORK_ITEM_TABLE,
 		},
 		ApiClient:   data.ApiClient,
-		PageSize:    100,
+		PageSize:    planeWorkItemPageSize,
 		UrlTemplate: "api/v1/workspaces/{{ .Params.WorkspaceSlug }}/projects/{{ .Params.ProjectId }}/work-items/",
 		Query: func(reqData *api.RequestData) (url.Values, errors.Error) {
 			query := url.Values{}
-			query.Set("per_page", "100")
+			query.Set("per_page", strconv.Itoa(planeWorkItemPageSize))
 			if cursor, ok := reqData.CustomData.(string); ok && cursor != "" {
 				query.Set("cursor", cursor)
 			}
@@ -71,5 +74,6 @@ func CollectWorkItems(taskCtx plugin.SubTaskContext) errors.Error {
 	if err != nil {
 		return err
 	}
+
 	return collector.Execute()
 }
