@@ -35,8 +35,8 @@ type planeApiCycle struct {
 	Name        string     `json:"name"`
 	Description *string    `json:"description"`
 	Status      string     `json:"status"`
-	StartDate   *time.Time `json:"start_date"`
-	EndDate     *time.Time `json:"end_date"`
+	StartDate   string     `json:"start_date"`
+	EndDate     string     `json:"end_date"`
 	CompletedAt *time.Time `json:"completed_at"`
 	CreatedAt   *time.Time `json:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at"`
@@ -59,6 +59,14 @@ func extractPlaneCycle(data []byte, connectionId uint64, projectId string) (*mod
 	if apiCycle.Description != nil {
 		description = *apiCycle.Description
 	}
+	startDate, err := parsePlaneDate(apiCycle.StartDate)
+	if err != nil {
+		return nil, err
+	}
+	endDate, err := parsePlaneDate(apiCycle.EndDate)
+	if err != nil {
+		return nil, err
+	}
 	return &models.PlaneCycle{
 		ConnectionId: connectionId,
 		ProjectId:    projectId,
@@ -66,8 +74,8 @@ func extractPlaneCycle(data []byte, connectionId uint64, projectId string) (*mod
 		Name:         apiCycle.Name,
 		Description:  description,
 		Status:       apiCycle.Status,
-		StartDate:    apiCycle.StartDate,
-		EndDate:      apiCycle.EndDate,
+		StartDate:    startDate,
+		EndDate:      endDate,
 		CompletedAt:  apiCycle.CompletedAt,
 		CreatedDate:  apiCycle.CreatedAt,
 		UpdatedDate:  apiCycle.UpdatedAt,
@@ -94,6 +102,13 @@ func extractPlaneCycleItem(data []byte, connectionId uint64, projectId, cycleId 
 		CreatedDate:  apiCycleItem.CreatedAt,
 		UpdatedDate:  apiCycleItem.UpdatedAt,
 	}, nil
+}
+
+func clearPlaneCycles(db dal.Dal, connectionId uint64, projectId string) errors.Error {
+	return db.Delete(
+		&models.PlaneCycle{},
+		dal.Where("connection_id = ? AND project_id = ?", connectionId, projectId),
+	)
 }
 
 func loadPlaneCycles(db dal.Dal, connectionId uint64, projectId string) ([]models.PlaneCycle, errors.Error) {

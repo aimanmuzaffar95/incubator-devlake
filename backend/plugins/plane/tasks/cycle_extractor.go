@@ -35,6 +35,11 @@ var ExtractCyclesMeta = plugin.SubTaskMeta{
 
 func ExtractCycles(taskCtx plugin.SubTaskContext) errors.Error {
 	data := taskCtx.GetData().(*PlaneTaskData)
+	db := taskCtx.GetDal()
+
+	if err := clearPlaneCycles(db, data.Options.ConnectionId, data.Options.ProjectId); err != nil {
+		return err
+	}
 
 	extractor, err := api.NewApiExtractor(api.ApiExtractorArgs{
 		RawDataSubTaskArgs: api.RawDataSubTaskArgs{
