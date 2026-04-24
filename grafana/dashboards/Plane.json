@@ -904,9 +904,9 @@
       ],
       "options": {
         "barRadius": 0,
-        "barWidth": 0.5,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1018,9 +1018,9 @@
       ],
       "options": {
         "barRadius": 0,
-        "barWidth": 0.51,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1770,9 +1770,9 @@
       "id": 17,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.6,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1873,9 +1873,9 @@
       "id": 18,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.6,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1975,9 +1975,9 @@
       "id": 19,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.6,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1991,7 +1991,7 @@
           "mode": "multi",
           "sort": "none"
         },
-        "xTickLabelRotation": -15,
+        "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
       "pluginVersion": "8.0.6",
@@ -2386,9 +2386,9 @@
       "id": 23,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.5,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
