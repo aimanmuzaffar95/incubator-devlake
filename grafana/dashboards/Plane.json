@@ -1086,16 +1086,7 @@
         }
       ],
       "title": "Cumulative Distribution of Lead Time [Resolved in Selected Time Range]",
-      "transformations": [
-        {
-          "id": "reduce",
-          "options": {
-            "reducers": [
-              "current"
-            ]
-          }
-        }
-      ],
+      "transformations": [],
       "type": "barchart"
     },
     {
@@ -1333,9 +1324,9 @@
       "id": 13,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.6,
+        "barWidth": 0.9,
         "fullHighlight": false,
-        "groupWidth": 0.7,
+        "groupWidth": 0.9,
         "legend": {
           "calcs": [],
           "displayMode": "list",
@@ -1349,7 +1340,7 @@
           "mode": "single",
           "sort": "none"
         },
-        "xTickLabelRotation": -15,
+        "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
       "pluginVersion": "8.0.6",
@@ -1360,7 +1351,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "select\r\n  COALESCE(c.name, 'No Cycle') as Cycle,\r\n  sum(wi.estimate_point) as `Estimate Points`\r\nfrom _tool_plane_work_items wi\r\n  join issues i on i.id = concat('plane:PlaneWorkItem:', wi.connection_id, ':', wi.project_id, ':', wi.work_item_id)\r\n  left join _tool_plane_cycle_items ci\r\n    on ci.connection_id = wi.connection_id\r\n   and ci.project_id = wi.project_id\r\n   and ci.item_id = wi.work_item_id\r\n   and ci.item_type = 'work_item'\r\n  left join _tool_plane_cycles c\r\n    on c.connection_id = ci.connection_id\r\n   and c.project_id = ci.project_id\r\n   and c.cycle_id = ci.cycle_id\r\nwhere\r\n  COALESCE(i.original_type, i.type) in (${plane_type})\r\n  and concat('plane:PlaneProject:', wi.connection_id, ':', wi.project_id) in (${plane_board_id})\r\ngroup by 1\r\norder by `Estimate Points` desc",
+          "rawSql": "select\r\n  COALESCE(c.name, 'No Cycle') as Cycle,\r\n  sum(wi.estimate_point) as `Estimate Points`\r\nfrom _tool_plane_work_items wi\r\n  join issues i on i.id = concat('plane:PlaneWorkItem:', wi.connection_id, ':', wi.project_id, ':', wi.work_item_id)\r\n  left join _tool_plane_cycle_items ci\r\n    on ci.connection_id = wi.connection_id\r\n   and ci.project_id = wi.project_id\r\n   and ci.item_id = wi.work_item_id\r\n   and ci.item_type = 'work_item'\r\n  left join _tool_plane_cycles c\r\n    on c.connection_id = wi.connection_id\r\n   and c.project_id = wi.project_id\r\n   and c.cycle_id = COALESCE(ci.cycle_id, NULLIF(wi.cycle_id, ''))\r\nwhere\r\n  COALESCE(i.original_type, i.type) in (${plane_type})\r\n  and concat('plane:PlaneProject:', wi.connection_id, ':', wi.project_id) in (${plane_board_id})\r\ngroup by 1\r\norder by `Estimate Points` desc",
           "refId": "A",
           "select": [
             [
@@ -1909,7 +1900,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "select\r\n  COALESCE(c.name, 'No Cycle') as Cycle,\r\n  count(distinct wi.work_item_id) as `Work Items`\r\nfrom _tool_plane_work_items wi\r\n  join issues i on i.id = concat('plane:PlaneWorkItem:', wi.connection_id, ':', wi.project_id, ':', wi.work_item_id)\r\n  left join _tool_plane_cycle_items ci\r\n    on ci.connection_id = wi.connection_id\r\n   and ci.project_id = wi.project_id\r\n   and ci.item_id = wi.work_item_id\r\n   and ci.item_type = 'work_item'\r\n  left join _tool_plane_cycles c\r\n    on c.connection_id = ci.connection_id\r\n   and c.project_id = ci.project_id\r\n   and c.cycle_id = ci.cycle_id\r\nwhere\r\n  COALESCE(i.original_type, i.type) in (${plane_type})\r\n  and concat('plane:PlaneProject:', wi.connection_id, ':', wi.project_id) in (${plane_board_id})\r\ngroup by 1\r\norder by `Work Items` desc",
+          "rawSql": "select\r\n  COALESCE(c.name, 'No Cycle') as Cycle,\r\n  count(distinct wi.work_item_id) as `Work Items`\r\nfrom _tool_plane_work_items wi\r\n  join issues i on i.id = concat('plane:PlaneWorkItem:', wi.connection_id, ':', wi.project_id, ':', wi.work_item_id)\r\n  left join _tool_plane_cycle_items ci\r\n    on ci.connection_id = wi.connection_id\r\n   and ci.project_id = wi.project_id\r\n   and ci.item_id = wi.work_item_id\r\n   and ci.item_type = 'work_item'\r\n  left join _tool_plane_cycles c\r\n    on c.connection_id = wi.connection_id\r\n   and c.project_id = wi.project_id\r\n   and c.cycle_id = COALESCE(ci.cycle_id, NULLIF(wi.cycle_id, ''))\r\nwhere\r\n  COALESCE(i.original_type, i.type) in (${plane_type})\r\n  and concat('plane:PlaneProject:', wi.connection_id, ':', wi.project_id) in (${plane_board_id})\r\ngroup by 1\r\norder by `Work Items` desc",
           "refId": "A",
           "select": [
             [
@@ -2011,7 +2002,7 @@
           "group": [],
           "metricColumn": "none",
           "rawQuery": true,
-          "rawSql": "select\r\n  COALESCE(c.name, 'No Cycle') as Cycle,\r\n  count(distinct case when i.status not in ('DONE', 'CANCELLED') then wi.work_item_id else null end) as `Open Work Items`,\r\n  count(distinct case when i.status = 'DONE' then wi.work_item_id else null end) as `Closed Work Items`\r\nfrom _tool_plane_work_items wi\r\n  left join _tool_plane_cycle_items ci\r\n    on ci.connection_id = wi.connection_id\r\n   and ci.project_id = wi.project_id\r\n   and ci.item_id = wi.work_item_id\r\n   and ci.item_type = 'work_item'\r\n  left join _tool_plane_cycles c\r\n    on c.connection_id = ci.connection_id\r\n   and c.project_id = ci.project_id\r\n   and c.cycle_id = ci.cycle_id\r\n  join issues i on i.id = concat('plane:PlaneWorkItem:', wi.connection_id, ':', wi.project_id, ':', wi.work_item_id)\r\nwhere\r\n  COALESCE(i.original_type, i.type) in (${plane_type})\r\n  and concat('plane:PlaneProject:', wi.connection_id, ':', wi.project_id) in (${plane_board_id})\r\ngroup by 1\r\norder by `Closed Work Items` desc",
+          "rawSql": "select\r\n  COALESCE(c.name, 'No Cycle') as Cycle,\r\n  count(distinct case when i.status not in ('DONE', 'CANCELLED') then wi.work_item_id else null end) as `Open Work Items`,\r\n  count(distinct case when i.status = 'DONE' then wi.work_item_id else null end) as `Closed Work Items`\r\nfrom _tool_plane_work_items wi\r\n  left join _tool_plane_cycle_items ci\r\n    on ci.connection_id = wi.connection_id\r\n   and ci.project_id = wi.project_id\r\n   and ci.item_id = wi.work_item_id\r\n   and ci.item_type = 'work_item'\r\n  left join _tool_plane_cycles c\r\n    on c.connection_id = wi.connection_id\r\n   and c.project_id = wi.project_id\r\n   and c.cycle_id = COALESCE(ci.cycle_id, NULLIF(wi.cycle_id, ''))\r\n  join issues i on i.id = concat('plane:PlaneWorkItem:', wi.connection_id, ':', wi.project_id, ':', wi.work_item_id)\r\nwhere\r\n  COALESCE(i.original_type, i.type) in (${plane_type})\r\n  and concat('plane:PlaneProject:', wi.connection_id, ':', wi.project_id) in (${plane_board_id})\r\ngroup by 1\r\norder by `Closed Work Items` desc",
           "refId": "A",
           "select": [
             [

@@ -92,12 +92,37 @@ type planeApiWorkItem struct {
 	Priority            string             `json:"priority"`
 	Assignees           []planeApiAssignee `json:"assignees"`
 	EstimatePoint       planeApiFloat64    `json:"estimate_point"`
+	Cycle               planeApiId         `json:"cycle"`
 	CreatedAt           *time.Time         `json:"created_at"`
 	UpdatedAt           *time.Time         `json:"updated_at"`
 	CompletedAt         *time.Time         `json:"completed_at"`
 	StartDate           string             `json:"start_date"`
 	TargetDate          string             `json:"target_date"`
 	Parent              *string            `json:"parent"`
+}
+
+type planeApiId struct {
+	Id string
+}
+
+func (i *planeApiId) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		i.Id = ""
+		return nil
+	}
+	var id string
+	if err := json.Unmarshal(data, &id); err == nil {
+		i.Id = id
+		return nil
+	}
+	var obj struct {
+		Id string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &obj); err == nil {
+		i.Id = obj.Id
+		return nil
+	}
+	return nil
 }
 
 type planeApiFloat64 struct {
@@ -284,6 +309,7 @@ func mapPlaneWorkItem(
 		UpdatedDate:   apiWorkItem.UpdatedAt,
 		CompletedAt:   apiWorkItem.CompletedAt,
 		ParentId:      apiWorkItem.Parent,
+		CycleId:       apiWorkItem.Cycle.Id,
 	}
 	startDate, dueDate, err := applyPlaneDates(apiWorkItem.StartDate, apiWorkItem.TargetDate)
 	if err != nil {
