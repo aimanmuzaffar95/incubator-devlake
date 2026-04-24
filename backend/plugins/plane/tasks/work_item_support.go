@@ -78,7 +78,7 @@ func (a *planeApiAssignee) UnmarshalJSON(data []byte) error {
 	}
 
 	a.Id = decodeStringField("id")
-	a.Name = decodeStringField("display_name", "displayName", "name")
+	a.Name = decodeStringField("first_name", "firstName", "display_name", "displayName", "name")
 	return nil
 }
 
@@ -267,6 +267,7 @@ func mapPlaneWorkItem(
 	states map[string]models.PlaneState,
 	workItemTypes map[string]models.PlaneWorkItemType,
 	estimateMap map[string]*float64,
+	assigneeNameById map[string]string,
 ) (*models.PlaneWorkItem, errors.Error) {
 	workItem := &models.PlaneWorkItem{
 		ConnectionId:  connectionId,
@@ -290,10 +291,7 @@ func mapPlaneWorkItem(
 	}
 	workItem.StartDate = startDate
 	workItem.DueDate = dueDate
-	if len(apiWorkItem.Assignees) > 0 {
-		workItem.AssigneeId = apiWorkItem.Assignees[0].Id
-		workItem.AssigneeName = apiWorkItem.Assignees[0].Name
-	}
+	workItem.AssigneeId, workItem.AssigneeName = resolvePlanePrimaryAssignee(apiWorkItem.Assignees, assigneeNameById)
 	if state, ok := states[apiWorkItem.State]; ok {
 		workItem.StateName = state.Name
 		workItem.StateGroup = state.Group
