@@ -28,5 +28,6 @@ func All() []plugin.MigrationScript {
 		new(addEpicTable20260420),
 		new(addCycleTables20260421),
 		new(addEstimatePointTable20260422),
+		new(addCycleIdToWorkItems20260424),
 	}
 }
